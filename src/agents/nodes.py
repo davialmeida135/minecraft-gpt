@@ -8,11 +8,14 @@ from pydantic import BaseModel, Field
 from src.config import llm
 from src.agents.tools import minecraft_internet_search
 from src.agents.state import AgentState, Message
+from langgraph.graph import END, START, StateGraph
 
 PROMPT_PATH = Path(__file__).with_name("prompt.md")
 SUPERVISOR_PROMPT = (
     PROMPT_PATH.read_text(encoding="utf-8") if PROMPT_PATH.exists() else ""
 )
+
+wiki_llm = llm.bind_tools([minecraft_internet_search])
 
 
 def _format_messages(messages: List[Message]) -> str:
@@ -33,8 +36,8 @@ def _latest_user_content(messages: List[Message]) -> str:
 class SupervisorIntent(BaseModel):  
     """Grade documents using a binary score for relevance check."""
 
-    route: str = Field(
-        description="Route: 'wiki_agent' if more context is necessary, or 'final_response' if not ready to respond."
+    route: Literal["wiki_agent", "final_response"] = Field(
+        description="Route: 'wiki_agent' if more context is necessary, or 'final_response' if ready to respond."
     )
 
 def supervisor_agent(
@@ -55,40 +58,68 @@ def supervisor_agent(
 
 
     goto = decision
-    intent = "wiki_search" if goto == "wiki_agent" else "respond"
+    intent = "wiki_search" if goto == "wiki_agent" else "final_response"
 
     return Command(update={"intent": intent}, goto=goto)
 
 
-def wiki_agent(state: AgentState) -> Command[Literal["draft_response"]]:
+def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
     query = _latest_user_content(state.get("messages", []))
-    wiki_result = minecraft_internet_search(query)
-
-    tool_call = {
-        "name": "minecraft_internet_search",
-        "args": {"query": query},
-        "result": wiki_result,
-    }
-
+    
+    # Let the LLM decide to call the tool
+    response = wiki_llm.invoke([
+        SystemMessage(content="You are a Minecraft wiki assistant. Use the minecraft_internet_search tool to find information."),
+        HumanMessage(content=query),
+    ])
+    
+    # Process tool calls from the response
     updated_calls = list(state.get("tool_calls", []))
-    updated_calls.append(tool_call)
-
+    wiki_result = ""
+    
+    if response.tool_calls:
+        for tool_call in response.tool_calls:
+            # Execute the tool
+            result = minecraft_internet_search.invoke(tool_call["args"])
+            updated_calls.append({
+                "name": tool_call["name"],
+                "args": tool_call["args"],
+                "result": result,
+            })
+            wiki_result += result + "\n"
+    
     return Command(
         update={
-            "wiki_context": wiki_result,
+            "wiki_context": wiki_result.strip(),
             "tool_calls": updated_calls,
             "intent": "wiki_search",
         },
-        goto="draft_response",
+        goto="supervisor",
     )
 
-def response_agent(state: AgentState) -> Command[Literal["send_reply"]]:
+def response_agent(state: AgentState) -> dict:
+    """Generate final response to the user."""
     prompt = """
 Use the following context to respond to the user's query in a helpful and concise manner.
     """
-    prompt = prompt + _format_messages(state.get("messages", []))
-    response = llm.invoke(prompt).content.strip().lower()
-    return response
+    
+    wiki_context = state.get("wiki_context", "")
+    if wiki_context:
+        prompt += f"\n\nWiki Context:\n{wiki_context}\n\n"
+    
+    prompt += "Conversation:\n" + _format_messages(state.get("messages", []))
+    
+    response = llm.invoke([
+        SystemMessage(content="Use the following context to respond to the user's query in a helpful and concise manner."),
+        HumanMessage(content=prompt),
+    ]).content.strip()
+    
+    # Return a dict to update state (required by LangGraph)
+    return Command(update={
+        "response": response,
+        "messages": state.get("messages", []) + [{"role": "assistant", "content": response}],
+        },
+        goto=END
+    )
 
 if __name__ == "__main__":
     from langchain_core.messages import convert_to_messages
@@ -97,7 +128,7 @@ if __name__ == "__main__":
             [
                 {
                     "role": "user",
-                    "content": "Como faço para craftar uma picareta de pedra?",
+                    "content": "How do i craft a stone pickaxe?",
                 },
             ]
     }

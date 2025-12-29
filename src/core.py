@@ -1,22 +1,30 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+from src.agents.state import AgentState
 
-from src.entrypoint import MinecraftState, draft_response, send_reply
-from src.agents.nodes import supervisor_agent, wiki_agent
+from src.agents.nodes import response_agent, supervisor_agent, wiki_agent
 
-workflow = StateGraph(MinecraftState)
-
+workflow = StateGraph(AgentState)
 workflow.add_node("supervisor", supervisor_agent)
 workflow.add_node("wiki_agent", wiki_agent)
-workflow.add_node("draft_response", draft_response)
-workflow.add_node("send_reply", send_reply)
+workflow.add_node("final_response", response_agent)
 
 workflow.add_edge(START, "supervisor")
-workflow.add_edge("supervisor", "wiki_agent")
-workflow.add_edge("supervisor", "draft_response")
-workflow.add_edge("wiki_agent", "draft_response")
-workflow.add_edge("draft_response", "send_reply")
-workflow.add_edge("send_reply", END)
 
-memory = MemorySaver()
-app = workflow.compile(checkpointer=memory)
+
+#memory = MemorySaver()
+app = workflow.compile()
+
+if __name__ == "__main__":
+    result = app.invoke(
+        {
+            "messages": [
+                {"role": "user", "content": "What does a stone pickaxe do?"},
+            ],
+            "player": {"player_id": "player123"},
+            "tool_calls": [],
+            "target_task_done": False,
+            "waypoints": [],
+        },
+    )
+    print(result["messages"][-1]["content"])

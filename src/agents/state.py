@@ -27,3 +27,4 @@ class AgentState(TypedDict):
     rag_context: Optional[str]  # contexto retornado do RAG
     wiki_context: Optional[str]  # contexto retornado do Minecraft Wiki
     waypoints: List[Dict[str, Any]]  # últimos waypoints relevantes
+    response: Optional[str]  # resposta final gerada pelo agente
