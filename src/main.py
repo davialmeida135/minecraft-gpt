@@ -2,9 +2,11 @@ from mcpq import ChatEvent, text
 
 from src.config import mc
 from src.core import app
+from src.agents.state import AgentState, PlayerContext
+from langchain.messages import HumanMessage
 
 
-def myfunc(event: ChatEvent):
+def call_agent(event: ChatEvent):
     if not event.message.startswith("@gpt"):
         return
 
@@ -13,25 +15,36 @@ def myfunc(event: ChatEvent):
 
     config = {"configurable": {"thread_id": event.player.id}}
 
-    initial_state = {
-        "messages": [{"role": "user", "content": user_message}],
-        "player": {"player_id": event.player.id},
-        "tool_calls": [],
-        "intent": None,
-        "target_task_done": False,
-        "rag_context": None,
-        "wiki_context": None,
-        "waypoints": [],
-    }
+    initial_state = AgentState(
+        query=user_message,
+        messages=[HumanMessage(content=user_message)],
+        tool_calls=[],
+        intent=None,
+        target_task_done=False,
+        rag_context=None,
+        wiki_context=None,
+        waypoints=[],
+    )
 
-    response = app.invoke(initial_state, timeout=60, config=config)
+    context = PlayerContext(
+        player_id=event.player.id,
+        player_name=event.player.name,
+        location={
+            "x": event.player.pos.x,
+            "y": event.player.pos.y,
+            "z": event.player.pos.z,
+        },
+        dimension=event.player.world,
+    )
+
+    response = app.invoke(initial_state, timeout=60, config=config, context=context)
 
     mc.postToChat(
-        f"{text.RED + text.BOLD}<Gepeto> {text.RESET} {text.BLUE} {response['response']}{text.RESET}"
+        f"{text.RED + text.BOLD}<Gepeto>{text.RESET} {text.BLUE} {response['response']}{text.RESET}"
     )
 
 
-mc.events.chat.register(myfunc)
+mc.events.chat.register(call_agent)
 print("Listener started - press Ctrl+C to stop")
 
 # Keep the script running indefinitely
