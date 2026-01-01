@@ -4,16 +4,19 @@ from src.config import mc
 from src.core import app
 from src.agents.state import AgentState, PlayerContext
 from langchain.messages import HumanMessage
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
+executor = ThreadPoolExecutor(max_workers=4)  # Tune as needed
 
-def call_agent(event: ChatEvent):
+async def async_call_agent(event: ChatEvent):
     if not event.message.startswith("@gpt"):
         return
 
     # Normalize user message by stripping the trigger token
     user_message = event.message.replace("@gpt", "", 1).strip()
 
-    config = {"configurable": {"thread_id": event.player.id}}
+    config = {"configurable": {"thread_id": asyncio.current_task().get_name()}}
 
     initial_state = AgentState(
         query=user_message,
@@ -37,12 +40,18 @@ def call_agent(event: ChatEvent):
         dimension=event.player.world,
     )
 
-    response = app.invoke(initial_state, timeout=60, config=config, context=context)
+    print(f"Received message from {event.player.name} on thread {asyncio.current_task().get_name()}: {user_message}")
+
+    response = await app.ainvoke(initial_state, timeout=60, config=config, context=context)
 
     mc.postToChat(
         f"{text.RED + text.BOLD}<Gepeto>{text.RESET} {text.BLUE} {response['response']}{text.RESET}"
     )
+    print(f"Responded to {event.player.name} on thread {asyncio.current_task().get_name()}")
 
+def call_agent(event: ChatEvent):
+    # Offload the async handler to a background thread to avoid blocking the event loop
+    executor.submit(asyncio.run, async_call_agent(event))
 
 mc.events.chat.register(call_agent)
 print("Listener started - press Ctrl+C to stop")
@@ -54,5 +63,6 @@ try:
     while True:
         time.sleep(1)
 except KeyboardInterrupt:
-    mc.events.projectile_hit.stop()
+    mc.events.chat.stop()
+    executor.shutdown(wait=False)
     print("Listener stopped - connection will close automatically")
