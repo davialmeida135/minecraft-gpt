@@ -12,9 +12,14 @@ from src.agents.state import AgentState, Message, PlayerContext, ToolCall
 
 from langgraph.runtime import Runtime
 
-PROMPT_PATH = Path(__file__).with_name("prompt.md")
+SUPERVISOR_PROMPT_PATH = Path(__file__).parent / "prompts" / "supervisor.md"
 SUPERVISOR_PROMPT = (
-    PROMPT_PATH.read_text(encoding="utf-8") if PROMPT_PATH.exists() else ""
+    SUPERVISOR_PROMPT_PATH.read_text(encoding="utf-8") if SUPERVISOR_PROMPT_PATH.exists() else ""
+)
+
+RESPONSE_PROMPT_PATH = Path(__file__).parent / "prompts" / "response.md"
+RESPONSE_PROMPT = (
+    RESPONSE_PROMPT_PATH.read_text(encoding="utf-8") if RESPONSE_PROMPT_PATH.exists() else ""
 )
 
 wiki_llm = llm.bind_tools([minecraft_internet_search])
@@ -98,7 +103,7 @@ def response_agent(state: AgentState, runtime: Runtime[PlayerContext]) -> dict:
     """Generate final response to the user."""
     prompt = _build_node_prompt(
         state=state,
-        system_prompt="Generate a helpful and concise response to the user's query using the provided context.",
+        system_prompt=RESPONSE_PROMPT,
         context=runtime.context
     )
     
