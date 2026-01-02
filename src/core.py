@@ -1,6 +1,8 @@
-from langgraph.checkpoint.memory import MemorySaver
+from src.config import get_async_stores
 from langgraph.graph import END, START, StateGraph
 from src.agents.state import AgentState
+
+from langgraph.graph.state import CompiledStateGraph
 
 from src.agents.nodes import response_agent, supervisor_agent, wiki_agent
 from langchain.messages import HumanMessage
@@ -12,16 +14,27 @@ workflow.add_node("final_response", response_agent)
 
 workflow.add_edge(START, "supervisor")
 
-app = workflow.compile()
+async def get_app() -> CompiledStateGraph[AgentState, None, AgentState, AgentState]:
+    store, checkpointer = await get_async_stores()
+    return workflow.compile(
+        store=store,
+        checkpointer=checkpointer,
+    )
 
 if __name__ == "__main__":
-    result = app.invoke(
-        {
-            "messages": [HumanMessage(content="What does a stone pickaxe do?")],
-            "player": {"player_id": "player123"},
-            "tool_calls": [],
-            "target_task_done": False,
-            "waypoints": [],
-        },
-    )
-    print(result["messages"][-1])
+    import asyncio
+
+    async def main():
+        app = await get_app()
+        result = await app.ainvoke(
+            {
+                "messages": [HumanMessage(content="What does a stone pickaxe do?")],
+                "player": {"player_id": "player123"},
+                "tool_calls": [],
+                "target_task_done": False,
+                "waypoints": [],
+            },
+        )
+        print(result["messages"][-1])
+
+    asyncio.run(main())
