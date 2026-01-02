@@ -8,7 +8,7 @@ load_dotenv()
 
 mc = Minecraft(host="192.168.9.132", port=14445)
 
-llm = ChatOpenAI(model="gpt-5-nano")
+llm = ChatOpenAI(model="gpt-4.1-nano")
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 PROJECT_ROOT = Path(__file__).parent.parent
