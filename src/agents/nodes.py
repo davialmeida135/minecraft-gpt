@@ -5,7 +5,7 @@ from langchain.messages import HumanMessage, SystemMessage, AnyMessage, AIMessag
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from src.config import llm
+from src.config import llm, store
 from src.agents.tools import minecraft_internet_search
 from langgraph.graph import END
 from src.agents.state import AgentState, Message, PlayerContext, ToolCall
@@ -35,7 +35,10 @@ WIKI_PROMPT = (
 
 wiki_llm = llm.bind_tools([minecraft_internet_search])
 
-def _build_node_prompt(state: AgentState, system_prompt: str = None, context: PlayerContext = None) -> list[AnyMessage]:
+
+def _build_node_prompt(
+    state: AgentState, system_prompt: str = None, context: PlayerContext = None
+) -> list[AnyMessage]:
     """Build a prompt segment from the message history."""
 
     context_prompt = ""
@@ -56,26 +59,32 @@ def _build_node_prompt(state: AgentState, system_prompt: str = None, context: Pl
 
     return full_prompt
 
-class SupervisorIntent(BaseModel):  
+
+class SupervisorIntent(BaseModel):
     """Grade documents using a binary score for relevance check."""
 
     route: Literal["wiki_agent", "final_response"] = Field(
         description="Route: 'wiki_agent' if more context is necessary, or 'final_response' if ready to respond."
     )
 
+
 def supervisor_agent(
-    state: AgentState,
-    runtime: Runtime[PlayerContext]
+    state: AgentState, runtime: Runtime[PlayerContext]
 ) -> Command[Literal["wiki_agent", "final_response"]]:
 
-    prompt = _build_node_prompt(state=state, system_prompt=SUPERVISOR_PROMPT, context=runtime.context)
+    prompt = _build_node_prompt(
+        state=state, system_prompt=SUPERVISOR_PROMPT, context=runtime.context
+    )
 
     response = llm.with_structured_output(SupervisorIntent).invoke(prompt)
 
     goto = response.route
     intent = "wiki_search" if goto == "wiki_agent" else "final_response"
 
-    return Command(update={"intent": intent, "messages": [AIMessage(content=response.route)]}, goto=goto)
+    return Command(
+        update={"intent": intent, "messages": [AIMessage(content=response.route)]},
+        goto=goto,
+    )
 
 
 def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
@@ -92,11 +101,13 @@ def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
         for tool_call in response.tool_calls:
             # Execute the tool
             result = minecraft_internet_search.invoke(tool_call["args"])
-            tool_calls.append({
-                "name": tool_call["name"],
-                "args": tool_call["args"],
-                "result": result,
-            })
+            tool_calls.append(
+                {
+                    "name": tool_call["name"],
+                    "args": tool_call["args"],
+                    "result": result,
+                }
+            )
             wiki_result += result + "\n"
 
     return Command(
@@ -109,32 +120,36 @@ def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
         goto="supervisor",
     )
 
+
 def response_agent(state: AgentState, runtime: Runtime[PlayerContext]) -> dict:
     """Generate final response to the user."""
     prompt = _build_node_prompt(
-        state=state,
-        system_prompt=RESPONSE_PROMPT,
-        context=runtime.context
+        state=state, system_prompt=RESPONSE_PROMPT, context=runtime.context
     )
-    
+
     response = llm.invoke(prompt).content.strip()
-    
-    # Return a dict to update state (required by LangGraph)
-    return Command(update={
-        "response": response,
-        "messages": [AIMessage(content=response)],
-        },
-        goto=END
+
+    store.put_message(
+        writer="response_agent",
+        writer_type="AI",
+        message=response,
+        player_id=runtime.context.get("player_id", "global"),
     )
+
+    # Return a dict to update state (required by LangGraph)
+    return Command(
+        update={
+            "response": response,
+            "messages": [AIMessage(content=response)],
+        },
+        goto=END,
+    )
+
 
 if __name__ == "__main__":
     from langchain_core.messages import convert_to_messages
-    input = {
-        "messages":
-            [
-                HumanMessage(content="What does a stone pickaxe do?")
-            ]
-    }
+
+    input = {"messages": [HumanMessage(content="What does a stone pickaxe do?")]}
     state: AgentState = AgentState(**input)
     output = supervisor_agent(state)
     print(output)

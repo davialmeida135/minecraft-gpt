@@ -1,6 +1,7 @@
+import uuid
 from mcpq import ChatEvent, text
 
-from src.config import mc
+from src.config import mc, store
 from src.core import get_app
 from src.agents.state import AgentState, PlayerContext
 from langchain.messages import HumanMessage
@@ -39,6 +40,13 @@ async def async_call_agent(event: ChatEvent):
             "z": event.player.pos.z,
         },
         dimension=event.player.world,
+    )
+
+    store.put_message(
+        writer=event.player.id,
+        writer_type="human",
+        message=user_message,
+        player_id=event.player.id,
     )
 
     print(

@@ -1,4 +1,3 @@
-from src.config import get_async_stores
 from langgraph.graph import END, START, StateGraph
 from src.agents.state import AgentState
 
@@ -15,11 +14,7 @@ workflow.add_node("final_response", response_agent)
 workflow.add_edge(START, "supervisor")
 
 async def get_app() -> CompiledStateGraph[AgentState, None, AgentState, AgentState]:
-    store, checkpointer = await get_async_stores()
-    return workflow.compile(
-        store=store,
-        checkpointer=checkpointer,
-    )
+    return workflow.compile()
 
 if __name__ == "__main__":
     import asyncio
