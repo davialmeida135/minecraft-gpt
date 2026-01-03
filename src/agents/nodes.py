@@ -5,7 +5,7 @@ from langchain.messages import HumanMessage, SystemMessage, AnyMessage, AIMessag
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from src.config import llm, store, SUPERVISOR_PROMPT, WIKI_PROMPT, RESPONSE_PROMPT
+from src.config import llm, store, SUPERVISOR_PROMPT, WIKI_PROMPT, RESPONSE_PROMPT, MESSAGE_HISTORY_LIMIT
 from src.agents.tools import minecraft_internet_search
 from langgraph.graph import END
 from src.agents.state import AgentState, Message, PlayerContext, ToolCall
@@ -19,6 +19,19 @@ def _build_node_prompt(
     state: AgentState, system_prompt: str = None, context: PlayerContext = None
 ) -> list[AnyMessage]:
     """Build a prompt segment from the message history."""
+
+    retrieved_history = store.get_last_messages_for_player(
+        player_id=context.get("player_id") if context else None,
+        limit=MESSAGE_HISTORY_LIMIT,
+    )
+    message_history: List[AnyMessage] = []
+
+    for msg in retrieved_history:
+        if msg["writer_type"] == "human":
+            message_history.insert(0, HumanMessage(content=msg["message"]))
+        else:
+            message_history.insert(0, AIMessage(content=msg["message"]))
+
 
     context_prompt = ""
     if context:
@@ -34,7 +47,7 @@ def _build_node_prompt(
     context_prompt += "\nConversation History:\n"
 
     full_prompt = [SystemMessage(content=context_prompt)] if context_prompt else []
-    full_prompt += state.get("messages", [])
+    full_prompt += message_history
 
     return full_prompt
 

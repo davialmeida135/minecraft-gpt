@@ -29,6 +29,7 @@ if __name__ == "__main__":
                 "target_task_done": False,
                 "waypoints": [],
             },
+            config={"recursion_limit": 6}
         )
         print(result["messages"][-1])
 
