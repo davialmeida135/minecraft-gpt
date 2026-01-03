@@ -14,12 +14,23 @@ from langgraph.runtime import Runtime
 
 SUPERVISOR_PROMPT_PATH = Path(__file__).parent / "prompts" / "supervisor.md"
 SUPERVISOR_PROMPT = (
-    SUPERVISOR_PROMPT_PATH.read_text(encoding="utf-8") if SUPERVISOR_PROMPT_PATH.exists() else ""
+    SUPERVISOR_PROMPT_PATH.read_text(encoding="utf-8")
+    if SUPERVISOR_PROMPT_PATH.exists()
+    else ""
 )
 
 RESPONSE_PROMPT_PATH = Path(__file__).parent / "prompts" / "response.md"
 RESPONSE_PROMPT = (
-    RESPONSE_PROMPT_PATH.read_text(encoding="utf-8") if RESPONSE_PROMPT_PATH.exists() else ""
+    RESPONSE_PROMPT_PATH.read_text(encoding="utf-8")
+    if RESPONSE_PROMPT_PATH.exists()
+    else ""
+)
+
+WIKI_PROMPT_PATH = Path(__file__).parent / "prompts" / "wiki.md"
+WIKI_PROMPT = (
+    WIKI_PROMPT_PATH.read_text(encoding="utf-8")
+    if WIKI_PROMPT_PATH.exists()
+    else ""
 )
 
 wiki_llm = llm.bind_tools([minecraft_internet_search])
@@ -68,16 +79,15 @@ def supervisor_agent(
 
 
 def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
-    wiki_prompt = "You are a Minecraft wiki assistant. Use the minecraft_internet_search tool to find information."
 
-    prompt = _build_node_prompt(state=state, system_prompt=wiki_prompt)
-    
+    prompt = _build_node_prompt(state=state, system_prompt=WIKI_PROMPT)
+
     response = wiki_llm.invoke(prompt)
 
     # Process tool calls from the response
     tool_calls = []
     wiki_result = ""
-    
+
     if response.tool_calls:
         for tool_call in response.tool_calls:
             # Execute the tool
@@ -88,7 +98,7 @@ def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
                 "result": result,
             })
             wiki_result += result + "\n"
-    
+
     return Command(
         update={
             "wiki_context": wiki_result.strip(),
