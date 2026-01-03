@@ -25,6 +25,27 @@ retriever = vector_store.as_retriever()
 
 store = SQLAlchemyStore("sqlite:///langgraph_store.db")
 
+SUPERVISOR_PROMPT_PATH = Path(__file__).parent / "agents" / "prompts" / "supervisor.md"
+SUPERVISOR_PROMPT = (
+    SUPERVISOR_PROMPT_PATH.read_text(encoding="utf-8")
+    if SUPERVISOR_PROMPT_PATH.exists()
+    else ""
+)
+
+RESPONSE_PROMPT_PATH = Path(__file__).parent / "agents" / "prompts" / "response.md"
+RESPONSE_PROMPT = (
+    RESPONSE_PROMPT_PATH.read_text(encoding="utf-8")
+    if RESPONSE_PROMPT_PATH.exists()
+    else ""
+)
+
+WIKI_PROMPT_PATH = Path(__file__).parent / "agents" / "prompts" / "wiki.md"
+WIKI_PROMPT = (
+    WIKI_PROMPT_PATH.read_text(encoding="utf-8")
+    if WIKI_PROMPT_PATH.exists()
+    else ""
+)
+
 if __name__ == "__main__":
     # Check how many documents are in the collection
     collection = vector_store._collection

@@ -5,33 +5,12 @@ from langchain.messages import HumanMessage, SystemMessage, AnyMessage, AIMessag
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from src.config import llm, store
+from src.config import llm, store, SUPERVISOR_PROMPT, WIKI_PROMPT, RESPONSE_PROMPT
 from src.agents.tools import minecraft_internet_search
 from langgraph.graph import END
 from src.agents.state import AgentState, Message, PlayerContext, ToolCall
 
 from langgraph.runtime import Runtime
-
-SUPERVISOR_PROMPT_PATH = Path(__file__).parent / "prompts" / "supervisor.md"
-SUPERVISOR_PROMPT = (
-    SUPERVISOR_PROMPT_PATH.read_text(encoding="utf-8")
-    if SUPERVISOR_PROMPT_PATH.exists()
-    else ""
-)
-
-RESPONSE_PROMPT_PATH = Path(__file__).parent / "prompts" / "response.md"
-RESPONSE_PROMPT = (
-    RESPONSE_PROMPT_PATH.read_text(encoding="utf-8")
-    if RESPONSE_PROMPT_PATH.exists()
-    else ""
-)
-
-WIKI_PROMPT_PATH = Path(__file__).parent / "prompts" / "wiki.md"
-WIKI_PROMPT = (
-    WIKI_PROMPT_PATH.read_text(encoding="utf-8")
-    if WIKI_PROMPT_PATH.exists()
-    else ""
-)
 
 wiki_llm = llm.bind_tools([minecraft_internet_search])
 
