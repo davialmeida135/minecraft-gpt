@@ -218,3 +218,4 @@ __marimo__/
 .vscode*
 *.bin
 *.sqlite3
+langgraph_store.db

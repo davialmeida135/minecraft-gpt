@@ -5,19 +5,20 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.config import retriever
 
 @tool
-def minecraft_internet_search(query: str) -> str:
+def minecraft_internet_search(term: str) -> str:
     """
     Minecraft Wiki search tool. 
-    - On the query, input only the item/block name.
+    - On the term, input only the item/block name.
     - Always input in English.
+    :param term: The search term for the Minecraft Wiki. Always in English.
     """
 
-    url = f"https://minecraft.wiki/w/Special:Search?search={query.replace(' ', '+')}&go=Go"
+    url = f"https://minecraft.wiki/w/Special:Search?search={term.replace(' ', '+')}&go=Go"
     loader = WebBaseLoader(url)
     documents = loader.load()
     if len(documents) == 0:
         return "No relevant information found on the Minecraft Wiki."
-    return documents[0].page_content.strip()[200:10000]  # Return a snippet of the content
+    return documents[0].page_content.strip().replace("\n\n\n", "\n")[200:10000]  # Return a snippet of the content
 
 # @tool
 # def minecraft_recipe_search(query: str) -> str:
@@ -42,5 +43,5 @@ def minecraft_internet_search(query: str) -> str:
 
 if __name__ == "__main__":
     # Example usage
-    a = minecraft_recipe_search.invoke({"query": "stone stone stone {}{}"})
+    a = minecraft_internet_search.invoke({"query": "stone stone stone {}{}"})
     print(a)

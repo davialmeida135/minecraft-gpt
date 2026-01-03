@@ -3,6 +3,8 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from mcpq import Minecraft
 from dotenv import load_dotenv
 from pathlib import Path
+from src.agents.sqlalchemy_store import SQLAlchemyStore
+import os
 
 load_dotenv()
 
@@ -21,6 +23,31 @@ vector_store = Chroma(
     persist_directory=str(CHROMA_DB_PATH),
 )
 retriever = vector_store.as_retriever()
+
+store = SQLAlchemyStore(os.getenv("DATABASE_URL", "sqlite:///langgraph_store.db"))
+
+SUPERVISOR_PROMPT_PATH = Path(__file__).parent / "agents" / "prompts" / "supervisor.md"
+SUPERVISOR_PROMPT = (
+    SUPERVISOR_PROMPT_PATH.read_text(encoding="utf-8")
+    if SUPERVISOR_PROMPT_PATH.exists()
+    else ""
+)
+
+RESPONSE_PROMPT_PATH = Path(__file__).parent / "agents" / "prompts" / "response.md"
+RESPONSE_PROMPT = (
+    RESPONSE_PROMPT_PATH.read_text(encoding="utf-8")
+    if RESPONSE_PROMPT_PATH.exists()
+    else ""
+)
+
+WIKI_PROMPT_PATH = Path(__file__).parent / "agents" / "prompts" / "wiki.md"
+WIKI_PROMPT = (
+    WIKI_PROMPT_PATH.read_text(encoding="utf-8") if WIKI_PROMPT_PATH.exists() else ""
+)
+
+MESSAGE_HISTORY_LIMIT = int(
+    os.getenv("MESSAGE_HISTORY_LIMIT", 6)
+)  # Accounts for all messages, both user and AI, so 3 exchanges.
 
 if __name__ == "__main__":
     # Check how many documents are in the collection
