@@ -63,7 +63,7 @@ async def async_call_agent(event: ChatEvent):
     )
 
     mc.postToChat(
-        f"{text.RED + text.BOLD}<Gepeto>{text.RESET}{text.GREEN}@{event.player.name}{text.RESET}{text.BLUE} {response['response']}{text.RESET}"
+        f"{text.RED + text.BOLD}<Gepeto>{text.RESET}{text.GREEN}@{event.player.name}{text.RESET}{text.GOLD} {response['response']}{text.RESET}"
     )
     print(
         f"Responded to {event.player.name} on thread {asyncio.current_task().get_name()}"
