@@ -219,3 +219,5 @@ __marimo__/
 *.bin
 *.sqlite3
 langgraph_store.db
+faiss_index/index.pkl
+/faiss_index
