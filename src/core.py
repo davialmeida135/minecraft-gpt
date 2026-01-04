@@ -1,10 +1,11 @@
 from langgraph.graph import END, START, StateGraph
-from src.agents.state import AgentState
+from src.agents.state import AgentState, PlayerContext
 
 from langgraph.graph.state import CompiledStateGraph
 
 from src.agents.nodes import response_agent, supervisor_agent, wiki_agent
 from langchain.messages import HumanMessage
+from src.config import store
 
 workflow = StateGraph(AgentState)
 workflow.add_node("supervisor", supervisor_agent)
@@ -21,15 +22,39 @@ if __name__ == "__main__":
 
     async def main():
         app = await get_app()
-        result = await app.ainvoke(
-            {
-                "messages": [HumanMessage(content="What does a stone pickaxe do?")],
-                "player": {"player_id": "player123"},
-                "tool_calls": [],
-                "target_task_done": False,
-                "waypoints": [],
+
+        message = "How do i craft a beacon?"
+
+        initial_state = AgentState(
+            query=message,
+            messages=[HumanMessage(content=message)],
+            tool_calls=[],
+            intent=None,
+            target_task_done=False,
+            rag_context=None,
+            wiki_context=None,
+            waypoints=[],
+        )
+        context = PlayerContext(
+            player_id="example_player_name",
+            player_name="example_player_name",
+            location={
+                "x": 123,
+                "y": 64,
+                "z": 100,
             },
-            config={"recursion_limit": 6}
+            dimension="overworld",
+        )
+        store.put_message(
+            writer="example_player_name",
+            writer_type="human",
+            message=message,
+            player_id="example_player_name",
+        )
+        result = await app.ainvoke(
+            {**initial_state},
+            config={"recursion_limit": 6},
+            context=context,
         )
         print(result["messages"][-1])
 

@@ -14,7 +14,7 @@ load_dotenv()
 # Use absolute paths based on project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 FAISS_INDEX_PATH = PROJECT_ROOT / "faiss_index"
-ITEMS_JSON_PATH = PROJECT_ROOT / "data" / "raw" / "items.json"
+ITEMS_JSON_PATH = PROJECT_ROOT / "data" / "processed" / "recipes_named.json"
 
 
 def encode_items_to_vector_store():
@@ -36,18 +36,14 @@ def encode_items_to_vector_store():
     documents = loader.load()
     print(f"Loaded {len(documents)} documents from JSON")
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    splits = splitter.split_documents(documents)
-    print(f"Split into {len(splits)} chunks")
-
     # Test embedding with a single document first
     print("Testing embedding with a single document...")
 
     # Create FAISS index from documents
     print("Creating FAISS index from all documents...")
     try:
-        vector_store = FAISS.from_documents(splits, embeddings)
-        print(f"✓ FAISS index created with {len(splits)} documents")
+        vector_store = FAISS.from_documents(documents, embeddings)
+        print(f"✓ FAISS index created with {len(documents)} documents")
     except Exception as e:
         print(f"✗ FAISS index creation failed: {e}")
         traceback.print_exc()

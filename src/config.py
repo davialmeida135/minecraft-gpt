@@ -15,7 +15,7 @@ print("Connecting to Minecraft server...")
 mc = Minecraft(host="192.168.9.132", port=14445)
 
 print("Setting up LLM...")
-llm = ChatOpenAI(model="gpt-4.1-nano")
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_retries=2)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 

@@ -1,18 +1,36 @@
 from pathlib import Path
 from typing import List, Literal
 
-from langchain.messages import HumanMessage, SystemMessage, AnyMessage, AIMessage
+from langchain.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
+from langgraph.graph import END
+from langgraph.runtime import Runtime
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-from src.config import llm, store, SUPERVISOR_PROMPT, WIKI_PROMPT, RESPONSE_PROMPT, MESSAGE_HISTORY_LIMIT
-from src.agents.tools import minecraft_internet_search
-from langgraph.graph import END
 from src.agents.state import AgentState, Message, PlayerContext, ToolCall
+from src.agents.tools import minecraft_internet_search, minecraft_recipe_search
+from src.config import (
+    MESSAGE_HISTORY_LIMIT,
+    RESPONSE_PROMPT,
+    SUPERVISOR_PROMPT,
+    WIKI_PROMPT,
+    llm,
+    store,
+)
 
-from langgraph.runtime import Runtime
+wiki_llm = llm.bind_tools([minecraft_internet_search, minecraft_recipe_search])
 
-wiki_llm = llm.bind_tools([minecraft_internet_search])
+
+def _extract_tool_input(args):
+    """Normalize tool arguments to a single value when possible."""
+    if isinstance(args, dict):
+        if "term" in args:
+            return args["term"]
+        if "query" in args:
+            return args["query"]
+        if len(args) == 1:
+            return next(iter(args.values()))
+    return args
 
 
 def _build_node_prompt(
@@ -32,6 +50,10 @@ def _build_node_prompt(
         else:
             message_history.insert(0, AIMessage(content=msg["message"]))
 
+    # Append in-flight conversation messages from state (e.g., current user query)
+    # state_messages = state.get("messages") if state else None
+    # if state_messages:
+    #     message_history.extend(state_messages)
 
     context_prompt = ""
     if context:
@@ -73,15 +95,22 @@ def supervisor_agent(
     goto = response.route
     intent = "wiki_search" if goto == "wiki_agent" else "final_response"
 
+    store.put_message(
+        writer="supervisor_agent",
+        writer_type="AI",
+        message=f"Routing to {goto}",
+        player_id=runtime.context.get("player_id", "global"),
+    )
+
     return Command(
         update={"intent": intent, "messages": [AIMessage(content=response.route)]},
         goto=goto,
     )
 
 
-def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
+def wiki_agent(state: AgentState, runtime: Runtime[PlayerContext]) -> Command[Literal["supervisor"]]:
 
-    prompt = _build_node_prompt(state=state, system_prompt=WIKI_PROMPT)
+    prompt = _build_node_prompt(state=state, system_prompt=WIKI_PROMPT, context=runtime.context)
 
     response = wiki_llm.invoke(prompt)
 
@@ -90,17 +119,39 @@ def wiki_agent(state: AgentState) -> Command[Literal["supervisor"]]:
     wiki_result = ""
 
     if response.tool_calls:
+        tool_registry = {
+            "minecraft_internet_search": minecraft_internet_search,
+            "minecraft_recipe_search": minecraft_recipe_search,
+        }
+
         for tool_call in response.tool_calls:
-            # Execute the tool
-            result = minecraft_internet_search.invoke(tool_call["args"])
+            tool_name = tool_call.get("name")
+            tool_args = tool_call.get("args", {})
+            tool = tool_registry.get(tool_name)
+
+            if not tool:
+                continue
+
+            try:
+                result = tool.invoke(_extract_tool_input(tool_args))
+            except Exception as exc:  # Keep agent alive on tool errors
+                result = f"Error calling {tool_name}: {exc}"
+
             tool_calls.append(
                 {
-                    "name": tool_call["name"],
-                    "args": tool_call["args"],
+                    "name": tool_name,
+                    "args": tool_args,
                     "result": result,
                 }
             )
             wiki_result += result + "\n"
+
+    store.put_message(
+        writer="wiki_agent",
+        writer_type="AI",
+        message=wiki_result.strip(),
+        player_id=runtime.context.get("player_id", "global"),
+    )
 
     return Command(
         update={
@@ -141,7 +192,7 @@ def response_agent(state: AgentState, runtime: Runtime[PlayerContext]) -> dict:
 if __name__ == "__main__":
     from langchain_core.messages import convert_to_messages
 
-    input = {"messages": [HumanMessage(content="What does a stone pickaxe do?")]}
+    input = {"messages": [HumanMessage(content="How to craft a piston?")]}
     state: AgentState = AgentState(**input)
     output = supervisor_agent(state)
     print(output)
