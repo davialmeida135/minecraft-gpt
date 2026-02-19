@@ -219,3 +219,4 @@ __marimo__/
 *.bin
 *.sqlite3
 langgraph_store.db
+conversations.db
