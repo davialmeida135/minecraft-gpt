@@ -1,18 +1,23 @@
 import uuid
 from agents import SQLiteSession, Runner
 from mcpq import ChatEvent, text
+import openai
 
 from src.config import mc, store
 #from src.core import get_app
 from src.agents.state import AgentState, PlayerContext
-from src.agents.nodes import response_agent
+from src.agents.nodes import supervisor_agent
 from langchain.messages import HumanMessage
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 executor = ThreadPoolExecutor(max_workers=4)  # Tune as needed
+from langsmith import traceable
+from langsmith.wrappers import wrap_openai
 
+client = wrap_openai(openai.Client())
 
+@traceable(name="Chat Pipeline")
 async def async_call_agent(event: ChatEvent):
     if not event.message.startswith("@gpt"):
         return
@@ -68,7 +73,7 @@ async def async_call_agent(event: ChatEvent):
     # )
 
     result = await Runner.run(
-        starting_agent=response_agent,
+        starting_agent=supervisor_agent,
         input=user_message,
         session=session,
         context=context
@@ -82,6 +87,7 @@ async def async_call_agent(event: ChatEvent):
     print(
         f"Responded to {event.player.name} on thread {asyncio.current_task().get_name()}"
     )
+    return response
 
 
 def call_agent(event: ChatEvent):

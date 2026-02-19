@@ -1,10 +1,11 @@
-from langchain.tools import tool
+from agents import function_tool
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.config import retriever
 
-@tool
+
+@function_tool
 def minecraft_internet_search(term: str) -> str:
     """
     Minecraft Wiki search tool. 

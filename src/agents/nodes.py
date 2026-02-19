@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List, Literal
 
+import openai
 from pydantic import BaseModel, Field
 
 from src.config import (
@@ -15,9 +16,67 @@ from src.agents.tools import minecraft_internet_search
 
 from src.agents.state import AgentState, Message, PlayerContext, ToolCall
 
-from agents import Agent, RunContextWrapper, RunContextWrapper, Runner
+from agents import Agent, RunContextWrapper, RunContextWrapper, handoff
 
-#wiki_llm = llm.bind_tools([minecraft_internet_search])
+def _build_node_prompt(
+    run_context: RunContextWrapper[PlayerContext], agent: Agent[PlayerContext]
+):
+    context = run_context.context
+
+    match agent.name:
+        case "supervisor_agent":
+            system_prompt = SUPERVISOR_PROMPT
+        case "wiki_agent":
+            system_prompt = WIKI_PROMPT
+        case "response_agent":
+            system_prompt = RESPONSE_PROMPT
+        case _:
+            system_prompt = ""
+
+    context_prompt = ""
+    if context:
+        context_prompt += (
+            f"Player Name: {context.get('player_name', 'Unknown')}\n"
+            f"Location: {context.get('location', {})}\n"
+            f"Dimension: {context.get('dimension', 'overworld')}\n"
+        )
+
+    if system_prompt:
+        context_prompt += f"\nSystem Prompt:\n{system_prompt}\n"
+
+    return context_prompt
+
+
+wiki_agent = Agent(
+    name="wiki_agent",
+    handoff_description="Searches the Minecraft Wiki for relevant information.",
+    instructions=_build_node_prompt,
+    model="gpt-4.1-nano",
+    tools=[minecraft_internet_search],
+)
+
+response_agent = Agent(
+    name="response_agent",
+    handoff_description="Generates final response to the user.",
+    instructions=_build_node_prompt,
+    model="gpt-4.1-nano",
+)
+
+supervisor_agent = Agent(
+    name="supervisor_agent",
+    handoff_description="Determines if more information is needed or if ready to respond.",
+    instructions=_build_node_prompt,
+    model="gpt-4.1-nano",
+    handoffs=[response_agent],
+    tools=[
+        wiki_agent.as_tool(
+            tool_name="wiki_agent",
+            tool_description="Use this tool to search the Minecraft Wiki for relevant information.",
+        )
+    ],
+)
+
+# wiki_llm = llm.bind_tools([minecraft_internet_search])
 
 
 # def _build_node_prompt(
@@ -57,12 +116,12 @@ from agents import Agent, RunContextWrapper, RunContextWrapper, Runner
 #     return full_prompt
 
 
-class SupervisorIntent(BaseModel):
-    """Grade documents using a binary score for relevance check."""
+# class SupervisorIntent(BaseModel):
+#     """Grade documents using a binary score for relevance check."""
 
-    route: Literal["wiki_agent", "final_response"] = Field(
-        description="Route: 'wiki_agent' if more context is necessary, or 'final_response' if ready to respond."
-    )
+#     route: Literal["wiki_agent", "final_response"] = Field(
+#         description="Route: 'wiki_agent' if more context is necessary, or 'final_response' if ready to respond."
+#     )
 
 
 # def supervisor_agent(
@@ -118,32 +177,6 @@ class SupervisorIntent(BaseModel):
 #     )
 
 
-def _build_node_prompt(
-    run_context: RunContextWrapper[PlayerContext], agent: Agent[PlayerContext]
-):
-    context = run_context.context
-    system_prompt = RESPONSE_PROMPT
-
-    context_prompt = ""
-    if context:
-        context_prompt += (
-            f"Player Name: {context.get('player_name', 'Unknown')}\n"
-            f"Location: {context.get('location', {})}\n"
-            f"Dimension: {context.get('dimension', 'overworld')}\n"
-        )
-
-    if system_prompt:
-        context_prompt += f"\nSystem Prompt:\n{system_prompt}\n"
-
-    return context_prompt
-
-
-response_agent = Agent(
-    name="response_agent",
-    handoff_description="Generates final response to the user.",
-    instructions=_build_node_prompt,
-    model="gpt-4.1-nano",
-)
 
 
 # def response_agent(state: AgentState, runtime: Runtime[PlayerContext]) -> dict:
